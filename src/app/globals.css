@@ -1,0 +1,40 @@
+﻿@import "tailwindcss";
+
+:root {
+  --status-scheduled: #2d6cdf;
+  --status-ongoing: #00a178;
+  --status-ended: #9098a6;
+}
+
+@theme inline {
+  --font-sans: var(--font-noto-sans-kr);
+  --font-mono: var(--font-space-grotesk);
+}
+
+body {
+  font-family: var(--font-noto-sans-kr), "Noto Sans KR", sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-space-grotesk), var(--font-noto-sans-kr), sans-serif;
+}
+
+.fc .fc-toolbar-title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.fc .fc-button {
+  border-radius: 0.6rem;
+  border: none;
+  background: #111827;
+}
+
+.fc .fc-daygrid-event {
+  border-radius: 0.5rem;
+  padding: 2px 4px;
+  font-size: 0.72rem;
+}

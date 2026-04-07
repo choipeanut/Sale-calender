@@ -34,6 +34,11 @@ npm run dev
 
 ## Android APK
 - Generated debug APK path: `artifacts/android/sale-calendar-debug.apk`
+- Current APK includes offline demo flows:
+  - Home / Calendar / Upcoming tabs
+  - Favorite brand save
+  - Notification preference save + simulation
+  - Admin edit + dedupe simulation
 - Install via USB debugging:
 ```bash
 adb install -r artifacts/android/sale-calendar-debug.apk

@@ -27,3 +27,4 @@
 - Ingestion log: `docs/ingestion-sample-log.md`
 - Notification simulation: `docs/notification-simulation.md`
 - APK artifact: `artifacts/android/sale-calendar-debug.apk`
+- APK runtime check: app boots into multi-tab interactive UI (not splash-only)

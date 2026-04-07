@@ -32,6 +32,20 @@ npm run dev
 - `npm run artifact:screenshots`
 - `npm run ingest:run`
 
+## Android APK
+- Generated debug APK path: `artifacts/android/sale-calendar-debug.apk`
+- Install via USB debugging:
+```bash
+adb install -r artifacts/android/sale-calendar-debug.apk
+```
+- Rebuild APK:
+```bash
+npm install
+npx cap sync android
+cd android
+./gradlew assembleDebug
+```
+
 ## Required Artifacts
 - `requirements.md`
 - `information-architecture.md`

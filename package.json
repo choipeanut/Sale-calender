@@ -12,9 +12,14 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "artifact:screenshots": "playwright test tests/e2e/screenshots.spec.ts",
-    "ingest:run": "tsx scripts/run-ingestion.ts"
+    "ingest:run": "tsx scripts/run-ingestion.ts",
+    "android:sync": "npx cap sync android",
+    "android:apk": "cd android && gradlew.bat assembleDebug"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/cli": "^8.3.0",
+    "@capacitor/core": "^8.3.0",
     "@fullcalendar/core": "^6.1.20",
     "@fullcalendar/daygrid": "^6.1.20",
     "@fullcalendar/interaction": "^6.1.20",

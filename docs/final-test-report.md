@@ -7,6 +7,7 @@
 - `npm run test:e2e` ✅ pass (4 tests)
 - `npm run artifact:screenshots` ✅ pass (2 tests)
 - `npm run ingest:run` ✅ pass
+- `cd android && gradlew.bat assembleDebug` ✅ pass (APK 생성)
 
 ## Unit Coverage Snapshot
 - statements: 66.3%
@@ -25,3 +26,4 @@
 - Screenshots: `docs/phase-1-screenshots/*`
 - Ingestion log: `docs/ingestion-sample-log.md`
 - Notification simulation: `docs/notification-simulation.md`
+- APK artifact: `artifacts/android/sale-calendar-debug.apk`

@@ -14,6 +14,7 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "docs/test-coverage/**",
     "docs/playwright-report/**",
+    "android/**/build/**",
   ]),
 ]);
 

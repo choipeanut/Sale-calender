@@ -6,6 +6,27 @@ const normalize = (text: string) =>
     .replace(/\s+/g, "")
     .replace(/[\-_/]/g, "");
 
+const detectSeasonToken = (title: string) => {
+  const normalized = title.toLowerCase();
+  if (normalized.includes("봄") || normalized.includes("spring")) {
+    return "spring";
+  }
+
+  if (normalized.includes("여름") || normalized.includes("summer")) {
+    return "summer";
+  }
+
+  if (normalized.includes("가을") || normalized.includes("fall") || normalized.includes("autumn")) {
+    return "autumn";
+  }
+
+  if (normalized.includes("겨울") || normalized.includes("winter")) {
+    return "winter";
+  }
+
+  return null;
+};
+
 const dateDistanceInDays = (a?: string | null, b?: string | null) => {
   if (!a || !b) {
     return Number.POSITIVE_INFINITY;
@@ -41,8 +62,12 @@ export const findDuplicateCandidates = (events: EventRecord[]) => {
       const titleSimilarity =
         normalize(left.title).includes(normalize(right.title)) || normalize(right.title).includes(normalize(left.title));
       const dateNear = dateDistanceInDays(left.start_date, right.start_date) <= 7;
+      const leftSeason = detectSeasonToken(left.title);
+      const rightSeason = detectSeasonToken(right.title);
+      const seasonCompatible = !leftSeason || !rightSeason || leftSeason === rightSeason;
+      const strongSameSourceSignal = sameLink && (titleSimilarity || dateNear);
 
-      if (sameLink || (titleSimilarity && dateNear)) {
+      if (seasonCompatible && (strongSameSourceSignal || (titleSimilarity && dateNear))) {
         candidates.push({
           primary: left.confidence_score >= right.confidence_score ? left : right,
           duplicate: left.confidence_score >= right.confidence_score ? right : left,

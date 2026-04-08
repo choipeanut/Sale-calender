@@ -14,6 +14,39 @@ const isSameByKey = (incoming: EventRecord, existing: EventRecord) => {
   return sameBrand && (sameSlug || (similarTitle && nearbyDate));
 };
 
+const reliabilityRank = (event: EventRecord) => {
+  let score = 0;
+
+  if (event.announcement_status === "official") {
+    score += 2;
+  }
+
+  if (event.verification_status === "verified") {
+    score += 2;
+  }
+
+  if (!event.is_estimated) {
+    score += 1;
+  }
+
+  return score;
+};
+
+const mergeSourcesUnique = (left: EventRecord["sources"], right: EventRecord["sources"]) => {
+  const seen = new Set<string>();
+  const merged = [...left, ...right].filter((source) => {
+    const key = `${source.source_url}|${source.parsed_start_date ?? ""}|${source.parsed_end_date ?? ""}|${source.raw_excerpt ?? ""}`;
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+
+  return merged;
+};
+
 export const runIngestionPipeline = async (sourceTarget = "all:manual"): Promise<{
   result: IngestionResult;
   jobId: string;
@@ -21,34 +54,48 @@ export const runIngestionPipeline = async (sourceTarget = "all:manual"): Promise
   const job = await repository.createCrawlJob(sourceTarget);
 
   try {
-    const parsedEvents = await parseSources();
     const existing = await repository.listEvents();
+    const parsedEvents = await parseSources(existing);
 
     let created = 0;
     let updated = 0;
 
     for (const parsed of parsedEvents) {
-      const matched = existing.find((item) => isSameByKey(parsed, item));
+      const matchedIndex = existing.findIndex((item) => isSameByKey(parsed, item));
+      const matched = matchedIndex >= 0 ? existing[matchedIndex] : null;
+
       if (!matched) {
-        await repository.createEvent(parsed);
+        const createdEvent = await repository.createEvent(parsed);
+        existing.push(createdEvent);
         created += 1;
         continue;
       }
 
-      await repository.patchEvent(matched.id, {
+      const shouldUseParsed =
+        parsed.announcement_status === "official" || reliabilityRank(parsed) >= reliabilityRank(matched);
+      const preferred = shouldUseParsed ? parsed : matched;
+
+      const patched = await repository.patchEvent(matched.id, {
         ...matched,
-        title: parsed.title,
-        start_date: parsed.start_date,
-        end_date: parsed.end_date,
-        date_precision: parsed.date_precision,
-        is_estimated: parsed.is_estimated,
-        estimation_basis: parsed.estimation_basis,
+        title: preferred.title,
+        description: preferred.description,
+        event_type: preferred.event_type,
+        start_date: preferred.start_date,
+        end_date: preferred.end_date,
+        date_precision: preferred.date_precision,
+        is_estimated: preferred.is_estimated,
+        estimation_basis: preferred.estimation_basis,
+        recurrence_pattern: preferred.recurrence_pattern,
         confidence_score: Math.max(matched.confidence_score, parsed.confidence_score),
-        sources: [...matched.sources, ...parsed.sources],
-        verification_status: parsed.verification_status,
+        sources: mergeSourcesUnique(matched.sources, parsed.sources),
+        verification_status: preferred.verification_status,
+        announcement_status: preferred.announcement_status,
         last_verified_at: formatISO(new Date()),
       });
 
+      if (patched) {
+        existing[matchedIndex] = patched;
+      }
       updated += 1;
     }
 

@@ -12,6 +12,49 @@ import type {
 } from "@/lib/types";
 
 const now = new Date();
+const toDateOnly = (date: Date) => formatISO(date, { representation: "date" });
+
+const pickNextAnnualDate = (month: number, day: number) => {
+  const candidate = new Date(now.getFullYear(), month - 1, day);
+  if (candidate < now) {
+    candidate.setFullYear(candidate.getFullYear() + 1);
+  }
+
+  return candidate;
+};
+
+const pickNextFromMonths = (months: number[], day: number) => {
+  const candidates = months.map((month) => pickNextAnnualDate(month, day)).sort((a, b) => a.getTime() - b.getTime());
+  return candidates[0];
+};
+
+const pickNextOliveyoungDayStart = () => {
+  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 25);
+  const thisMonthEnd = new Date(now.getFullYear(), now.getMonth(), 27, 23, 59, 59);
+
+  if (now <= thisMonthEnd) {
+    return thisMonthStart;
+  }
+
+  return new Date(now.getFullYear(), now.getMonth() + 1, 25);
+};
+
+const oliveyoungSaleStart = pickNextFromMonths([3, 6, 9, 12], 1);
+const oliveyoungSaleEnd = addDays(oliveyoungSaleStart, 6);
+const oliveyoungDayStart = pickNextOliveyoungDayStart();
+const oliveyoungDayEnd = new Date(oliveyoungDayStart.getFullYear(), oliveyoungDayStart.getMonth(), 27);
+const musinsaWinterStart = pickNextAnnualDate(11, 16);
+const musinsaWinterEnd = addDays(musinsaWinterStart, 10);
+const twentynineWeekStart = pickNextFromMonths([6, 11], 4);
+const twentynineWeekEnd = addDays(twentynineWeekStart, 9);
+const uniqloStart = pickNextAnnualDate(5, 15);
+const uniqloEnd = addDays(uniqloStart, 6);
+const gmarketStart = pickNextFromMonths([5, 11], 11);
+const gmarketEnd = addDays(gmarketStart, 6);
+const elevenStart = pickNextAnnualDate(11, 11);
+const elevenEnd = addDays(elevenStart, 6);
+const coupangStart = pickNextFromMonths([4, 11], 1);
+const coupangEnd = addDays(coupangStart, 6);
 
 export const seedBrands: Brand[] = [
   {
@@ -74,37 +117,74 @@ export const seedBrands: Brand[] = [
 
 export const seedEvents: EventRecord[] = [
   {
-    id: "event-oliveyoung-sale-spring",
+    id: "event-oliveyoung-sale",
     brand_id: "brand-oliveyoung",
-    title: "올영세일 봄 시즌",
-    slug: "oliveyoung-sale-spring",
+    title: "올영세일",
+    slug: "oliveyoung-sale",
     event_type: "season-sale",
-    description: "올리브영 대표 시즌 할인 행사",
-    start_date: formatISO(addDays(now, 6), { representation: "date" }),
-    end_date: formatISO(addDays(now, 12), { representation: "date" }),
-    date_precision: "day",
-    is_estimated: false,
-    estimation_basis: null,
+    description: "올리브영 대표 정기 대형 할인 행사",
+    start_date: toDateOnly(oliveyoungSaleStart),
+    end_date: toDateOnly(oliveyoungSaleEnd),
+    date_precision: "estimated",
+    is_estimated: true,
+    estimation_basis: "올영세일 정기 패턴(3월·6월·9월·12월) 기반 추정",
     recurrence_pattern: "quarterly",
     status: "scheduled",
-    confidence_score: 0.92,
-    verification_status: "verified",
-    announcement_status: "official",
+    confidence_score: 0.78,
+    verification_status: "pending",
+    announcement_status: "inferred",
     last_verified_at: formatISO(addDays(now, -1)),
-    admin_note: "공식 이벤트 페이지 확인",
+    admin_note: "공식 확정 공지 전 추정 일정",
     has_correction: false,
     sources: [
       {
         id: "source-oliveyoung-official",
-        event_id: "event-oliveyoung-sale-spring",
+        event_id: "event-oliveyoung-sale",
         source_url: "https://www.oliveyoung.co.kr/store/main/getEventList.do",
         source_type: "official_event",
         source_title: "올리브영 이벤트 페이지",
         collected_at: formatISO(addDays(now, -1)),
-        parsed_start_date: formatISO(addDays(now, 6), { representation: "date" }),
-        parsed_end_date: formatISO(addDays(now, 12), { representation: "date" }),
-        confidence_score: 0.92,
-        raw_excerpt: "올영세일 일정 안내",
+        parsed_start_date: toDateOnly(oliveyoungSaleStart),
+        parsed_end_date: toDateOnly(oliveyoungSaleEnd),
+        confidence_score: 0.78,
+        raw_excerpt: "올영세일 정기 패턴(분기별) 기반 추정",
+      },
+    ],
+    created_at: formatISO(addDays(now, -20)),
+    updated_at: formatISO(addDays(now, -1)),
+  },
+  {
+    id: "event-oliveyoung-day",
+    brand_id: "brand-oliveyoung",
+    title: "올영데이",
+    slug: "oliveyoung-day",
+    event_type: "monthly-membership-sale",
+    description: "올리브영 멤버십 중심 월간 행사",
+    start_date: toDateOnly(oliveyoungDayStart),
+    end_date: toDateOnly(oliveyoungDayEnd),
+    date_precision: "estimated",
+    is_estimated: true,
+    estimation_basis: "운영 규칙(매월 25~27일) 기반 추정",
+    recurrence_pattern: "monthly",
+    status: "scheduled",
+    confidence_score: 0.58,
+    verification_status: "pending",
+    announcement_status: "manual",
+    last_verified_at: formatISO(addDays(now, -1)),
+    admin_note: "월간 고정 이벤트로 관리. 공식 확정 공지 시 승격 필요",
+    has_correction: true,
+    sources: [
+      {
+        id: "source-oliveyoung-day-manual",
+        event_id: "event-oliveyoung-day",
+        source_url: "https://www.oliveyoung.co.kr/store/main/main.do",
+        source_type: "manual_input",
+        source_title: "운영자 규칙 입력",
+        collected_at: formatISO(addDays(now, -1)),
+        parsed_start_date: toDateOnly(oliveyoungDayStart),
+        parsed_end_date: toDateOnly(oliveyoungDayEnd),
+        confidence_score: 0.58,
+        raw_excerpt: "올영데이 매월 25~27일 운영 규칙",
       },
     ],
     created_at: formatISO(addDays(now, -20)),
@@ -117,30 +197,31 @@ export const seedEvents: EventRecord[] = [
     slug: "musinsa-winter-blackfriday",
     event_type: "blackfriday",
     description: "무신사 겨울 메가 세일",
-    start_date: formatISO(addDays(now, 1), { representation: "date" }),
-    end_date: formatISO(addDays(now, 5), { representation: "date" }),
-    date_precision: "day",
-    is_estimated: false,
-    estimation_basis: null,
+    start_date: toDateOnly(musinsaWinterStart),
+    end_date: toDateOnly(musinsaWinterEnd),
+    date_precision: "estimated",
+    is_estimated: true,
+    estimation_basis: "무신사 뉴스룸 기반(겨울 블프 11월 중순 패턴) 추정",
     recurrence_pattern: "yearly",
     status: "scheduled",
-    confidence_score: 0.88,
-    verification_status: "verified",
-    announcement_status: "official",
+    confidence_score: 0.76,
+    verification_status: "pending",
+    announcement_status: "inferred",
     last_verified_at: formatISO(addDays(now, -2)),
-    admin_note: "기획전 URL 확인",
+    admin_note: "공식 확정 공지 전 추정 일정",
     has_correction: false,
     sources: [
       {
-        id: "source-musinsa-official",
+        id: "source-musinsa-newsroom",
         event_id: "event-musinsa-winter-blackfriday",
-        source_url: "https://www.musinsa.com/events",
-        source_type: "official_event",
-        source_title: "무신사 이벤트",
+        source_url: "https://newsroom.musinsa.com/newsroom-menu/2025-1114",
+        source_type: "official_newsroom",
+        source_title: "무신사 뉴스룸",
         collected_at: formatISO(addDays(now, -2)),
-        parsed_start_date: formatISO(addDays(now, 1), { representation: "date" }),
-        parsed_end_date: formatISO(addDays(now, 5), { representation: "date" }),
-        confidence_score: 0.88,
+        parsed_start_date: toDateOnly(musinsaWinterStart),
+        parsed_end_date: toDateOnly(musinsaWinterEnd),
+        confidence_score: 0.76,
+        raw_excerpt: "무진장 겨울 블프 11월 중순~하순 진행 이력",
       },
     ],
     created_at: formatISO(addDays(now, -30)),
@@ -153,29 +234,30 @@ export const seedEvents: EventRecord[] = [
     slug: "29cm-29week",
     event_type: "fashion-week",
     description: "29CM 대표 할인 행사",
-    start_date: formatISO(addDays(now, -2), { representation: "date" }),
-    end_date: formatISO(addDays(now, 2), { representation: "date" }),
-    date_precision: "day",
-    is_estimated: false,
-    estimation_basis: null,
-    recurrence_pattern: "quarterly",
-    status: "ongoing",
-    confidence_score: 0.84,
-    verification_status: "verified",
-    announcement_status: "official",
+    start_date: toDateOnly(twentynineWeekStart),
+    end_date: toDateOnly(twentynineWeekEnd),
+    date_precision: "estimated",
+    is_estimated: true,
+    estimation_basis: "29CM 여름/겨울 이구위크 시즌 패턴 기반 추정",
+    recurrence_pattern: "biannual",
+    status: "scheduled",
+    confidence_score: 0.74,
+    verification_status: "pending",
+    announcement_status: "inferred",
     last_verified_at: formatISO(addDays(now, -1)),
     has_correction: false,
     sources: [
       {
-        id: "source-29cm-event",
+        id: "source-29cm-newsroom",
         event_id: "event-29cm-29week",
-        source_url: "https://www.29cm.co.kr/event",
-        source_type: "official_event",
-        source_title: "29CM 이벤트",
+        source_url: "https://newsroom.musinsa.com/newsroom-menu/2025-0616-29cm",
+        source_type: "official_newsroom",
+        source_title: "29CM/무신사 뉴스룸",
         collected_at: formatISO(addDays(now, -1)),
-        parsed_start_date: formatISO(addDays(now, -2), { representation: "date" }),
-        parsed_end_date: formatISO(addDays(now, 2), { representation: "date" }),
-        confidence_score: 0.84,
+        parsed_start_date: toDateOnly(twentynineWeekStart),
+        parsed_end_date: toDateOnly(twentynineWeekEnd),
+        confidence_score: 0.74,
+        raw_excerpt: "이구위크 시즌성(여름/겨울) 대형 행사",
       },
     ],
     created_at: formatISO(addDays(now, -14)),
@@ -188,9 +270,9 @@ export const seedEvents: EventRecord[] = [
     slug: "uniqlo-appreciation",
     event_type: "appreciation-sale",
     description: "시즌 감사 특별 행사",
-    start_date: formatISO(addDays(now, 24), { representation: "date" }),
-    end_date: null,
-    date_precision: "month",
+    start_date: toDateOnly(uniqloStart),
+    end_date: toDateOnly(uniqloEnd),
+    date_precision: "estimated",
     is_estimated: true,
     estimation_basis: "최근 3년간 5월 중순 시작 패턴",
     recurrence_pattern: "yearly",
@@ -209,8 +291,8 @@ export const seedEvents: EventRecord[] = [
         source_type: "official_newsroom",
         source_title: "유니클로 뉴스",
         collected_at: formatISO(addDays(now, -3)),
-        parsed_start_date: formatISO(addDays(now, 24), { representation: "date" }),
-        parsed_end_date: null,
+        parsed_start_date: toDateOnly(uniqloStart),
+        parsed_end_date: toDateOnly(uniqloEnd),
         confidence_score: 0.61,
       },
     ],
@@ -224,8 +306,8 @@ export const seedEvents: EventRecord[] = [
     slug: "gmarket-bigsmile-day",
     event_type: "mega-sale",
     description: "G마켓/옥션 통합 대형 행사",
-    start_date: formatISO(addDays(now, 13), { representation: "date" }),
-    end_date: formatISO(addDays(now, 19), { representation: "date" }),
+    start_date: toDateOnly(gmarketStart),
+    end_date: toDateOnly(gmarketEnd),
     date_precision: "estimated",
     is_estimated: true,
     estimation_basis: "작년 일정 및 사전 티저 기준",
@@ -243,8 +325,8 @@ export const seedEvents: EventRecord[] = [
         source_type: "official_notice",
         source_title: "G마켓 공지",
         collected_at: formatISO(addDays(now, -1)),
-        parsed_start_date: formatISO(addDays(now, 13), { representation: "date" }),
-        parsed_end_date: formatISO(addDays(now, 19), { representation: "date" }),
+        parsed_start_date: toDateOnly(gmarketStart),
+        parsed_end_date: toDateOnly(gmarketEnd),
         confidence_score: 0.67,
       },
     ],
@@ -258,17 +340,17 @@ export const seedEvents: EventRecord[] = [
     slug: "11st-grand-1111",
     event_type: "mega-sale",
     description: "11번가 대표 행사",
-    start_date: formatISO(addDays(now, -40), { representation: "date" }),
-    end_date: formatISO(addDays(now, -36), { representation: "date" }),
-    date_precision: "day",
-    is_estimated: false,
-    estimation_basis: null,
+    start_date: toDateOnly(elevenStart),
+    end_date: toDateOnly(elevenEnd),
+    date_precision: "estimated",
+    is_estimated: true,
+    estimation_basis: "그랜드십일절(11월) 시즌 패턴 기반 추정",
     recurrence_pattern: "yearly",
-    status: "ended",
-    confidence_score: 0.95,
-    verification_status: "verified",
-    announcement_status: "official",
-    last_verified_at: formatISO(addDays(now, -35)),
+    status: "scheduled",
+    confidence_score: 0.72,
+    verification_status: "pending",
+    announcement_status: "inferred",
+    last_verified_at: formatISO(addDays(now, -2)),
     sources: [
       {
         id: "source-11st-notice",
@@ -276,14 +358,14 @@ export const seedEvents: EventRecord[] = [
         source_url: "https://www.11st.co.kr/main",
         source_type: "official_notice",
         source_title: "11번가 메인 공지",
-        collected_at: formatISO(addDays(now, -35)),
-        parsed_start_date: formatISO(addDays(now, -40), { representation: "date" }),
-        parsed_end_date: formatISO(addDays(now, -36), { representation: "date" }),
-        confidence_score: 0.95,
+        collected_at: formatISO(addDays(now, -2)),
+        parsed_start_date: toDateOnly(elevenStart),
+        parsed_end_date: toDateOnly(elevenEnd),
+        confidence_score: 0.72,
       },
     ],
     created_at: formatISO(addDays(now, -100)),
-    updated_at: formatISO(addDays(now, -35)),
+    updated_at: formatISO(addDays(now, -2)),
   },
   {
     id: "event-coupang-wowweek",
@@ -292,30 +374,30 @@ export const seedEvents: EventRecord[] = [
     slug: "coupang-wow-week",
     event_type: "wow-sale",
     description: "와우 회원 대상 할인 이벤트",
-    start_date: null,
-    end_date: null,
-    date_precision: "tbd",
+    start_date: toDateOnly(coupangStart),
+    end_date: toDateOnly(coupangEnd),
+    date_precision: "estimated",
     is_estimated: true,
-    estimation_basis: "공식 티저 전",
-    recurrence_pattern: "quarterly",
+    estimation_basis: "쿠팡 와우 이벤트 계절 패턴 기반 추정",
+    recurrence_pattern: "biannual",
     status: "scheduled",
-    confidence_score: 0.4,
+    confidence_score: 0.58,
     verification_status: "pending",
-    announcement_status: "manual",
+    announcement_status: "inferred",
     last_verified_at: formatISO(addDays(now, -4)),
-    admin_note: "수동 등록. 추후 확인 필요",
+    admin_note: "공식 티저/공지 확인 시 확정 필요",
     has_correction: false,
     sources: [
       {
         id: "source-coupang-manual",
         event_id: "event-coupang-wowweek",
         source_url: "https://www.coupang.com/",
-        source_type: "manual_input",
-        source_title: "운영자 수동 입력",
+        source_type: "official_notice",
+        source_title: "쿠팡 메인",
         collected_at: formatISO(addDays(now, -4)),
-        parsed_start_date: null,
-        parsed_end_date: null,
-        confidence_score: 0.4,
+        parsed_start_date: toDateOnly(coupangStart),
+        parsed_end_date: toDateOnly(coupangEnd),
+        confidence_score: 0.58,
       },
     ],
     created_at: formatISO(addDays(now, -12)),
@@ -369,7 +451,7 @@ export const seedNotificationLogs: NotificationLog[] = [
     user_id: "demo-user",
     event_id: "event-musinsa-winter-blackfriday",
     notification_type: "days_1",
-    scheduled_at: formatISO(addDays(now, 0)),
+    scheduled_at: formatISO(addDays(musinsaWinterStart, -1)),
     sent_at: null,
     status: "scheduled",
   },
@@ -382,7 +464,7 @@ export const seedCrawlJobs: CrawlJob[] = [
     started_at: formatISO(addDays(now, -1)),
     finished_at: formatISO(addDays(now, -1)),
     status: "completed",
-    items_found: 7,
+    items_found: 8,
     errors_count: 0,
     log_blob: "Daily ingestion run complete.",
   },

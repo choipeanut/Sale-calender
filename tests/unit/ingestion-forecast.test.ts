@@ -72,4 +72,19 @@ describe("ingestion forecast", () => {
     expect(template).toBeDefined();
     expect(hasTemplateMention("올리브영 올영세일 사전 공지", template!)).toBe(true);
   });
+
+  it("estimates oliveyoung day on 25th to 27th window", () => {
+    const template = EVENT_TEMPLATES.find((item) => item.key === "oliveyoung-day");
+    expect(template).toBeDefined();
+
+    const estimated = estimateWindowForTemplate(
+      template!,
+      [],
+      true,
+      new Date("2026-04-08T00:00:00+09:00"),
+    );
+
+    expect(estimated.start_date).toBe("2026-04-25");
+    expect(estimated.end_date).toBe("2026-04-27");
+  });
 });

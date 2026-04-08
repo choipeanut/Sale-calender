@@ -8,7 +8,7 @@ export interface CanonicalEventTemplate {
   title: string;
   slug: string;
   event_type: string;
-  recurrence_pattern: "quarterly" | "biannual" | "yearly";
+  recurrence_pattern: "monthly" | "quarterly" | "biannual" | "yearly";
   default_duration_days: number;
   aliases: string[];
   description: string;
@@ -55,6 +55,10 @@ const sameOrContains = (left: string, right: string) => {
 };
 
 const toIntervalMonths = (pattern: CanonicalEventTemplate["recurrence_pattern"]) => {
+  if (pattern === "monthly") {
+    return 1;
+  }
+
   if (pattern === "quarterly") {
     return 3;
   }
@@ -261,13 +265,25 @@ export const EVENT_TEMPLATES: CanonicalEventTemplate[] = [
     key: "oliveyoung-sale",
     brand_id: "brand-oliveyoung",
     title: "올영세일",
-    slug: "oliveyoung-sale-spring",
+    slug: "oliveyoung-sale",
     event_type: "season-sale",
     recurrence_pattern: "quarterly",
     default_duration_days: 7,
     aliases: ["올영세일", "올리브영 세일", "olive young sale"],
     description: "올리브영 대표 시즌 할인 행사",
-    schedule: { months: [3, 6, 9, 12], week_of_month: 2, weekday: 5 },
+    schedule: { months: [3, 6, 9, 12], day_of_month: 1 },
+  },
+  {
+    key: "oliveyoung-day",
+    brand_id: "brand-oliveyoung",
+    title: "올영데이",
+    slug: "oliveyoung-day",
+    event_type: "monthly-membership-sale",
+    recurrence_pattern: "monthly",
+    default_duration_days: 3,
+    aliases: ["올영데이", "oliveyoung day", "올리브영데이"],
+    description: "올리브영 월간 멤버십 행사",
+    schedule: { months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], day_of_month: 25 },
   },
   {
     key: "musinsa-winter-blackfriday",
@@ -300,10 +316,10 @@ export const EVENT_TEMPLATES: CanonicalEventTemplate[] = [
     slug: "29cm-29week",
     event_type: "fashion-week",
     recurrence_pattern: "biannual",
-    default_duration_days: 6,
+    default_duration_days: 10,
     aliases: ["이구위크", "29cm 이구위크", "29week"],
     description: "29CM 대표 할인 행사",
-    schedule: { months: [3, 8], week_of_month: 4, weekday: 5 },
+    schedule: { months: [6, 11], day_of_month: 4 },
   },
   {
     key: "uniqlo-appreciation",

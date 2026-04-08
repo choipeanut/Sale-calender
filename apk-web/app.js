@@ -5,6 +5,7 @@
     events: "sc_apk_events",
     adminLogs: "sc_apk_admin_logs",
   };
+  const EVENT_DATA_VERSION = 2;
 
   const BRANDS = [
     { id: "oliveyoung", name: "올리브영", category: "뷰티", site: "https://www.oliveyoung.co.kr/" },
@@ -20,17 +21,33 @@
     {
       id: "ev-olive-1",
       brandId: "oliveyoung",
-      title: "올영세일 봄 시즌",
+      title: "올영세일",
       eventType: "season-sale",
-      startOffset: 5,
-      endOffset: 11,
-      datePrecision: "day",
-      estimated: false,
-      estimationBasis: "공식 이벤트 페이지",
-      description: "올리브영 대표 시즌 할인 행사",
+      startOffset: 0,
+      endOffset: 6,
+      datePrecision: "estimated",
+      estimated: true,
+      estimationBasis: "분기 정기 패턴(3/6/9/12월)",
+      description: "올리브영 대표 정기 대형 할인 행사",
       sourceUrl: "https://www.oliveyoung.co.kr/store/main/getEventList.do",
       sourceTitle: "올리브영 이벤트 페이지",
-      confidence: 0.92,
+      confidence: 0.78,
+      lastVerified: 1,
+    },
+    {
+      id: "ev-olive-day-1",
+      brandId: "oliveyoung",
+      title: "올영데이",
+      eventType: "monthly-membership-sale",
+      startOffset: 0,
+      endOffset: 2,
+      datePrecision: "estimated",
+      estimated: true,
+      estimationBasis: "운영 규칙(매월 25~27일)",
+      description: "올리브영 월간 멤버십 행사",
+      sourceUrl: "https://www.oliveyoung.co.kr/store/main/main.do",
+      sourceTitle: "운영 규칙 기반",
+      confidence: 0.58,
       lastVerified: 1,
     },
     {
@@ -38,15 +55,15 @@
       brandId: "musinsa",
       title: "무진장 겨울 블랙프라이데이",
       eventType: "blackfriday",
-      startOffset: 1,
-      endOffset: 4,
-      datePrecision: "day",
-      estimated: false,
-      estimationBasis: "기획전 공지",
+      startOffset: 0,
+      endOffset: 10,
+      datePrecision: "estimated",
+      estimated: true,
+      estimationBasis: "무신사 뉴스룸 기반 11월 중순 패턴",
       description: "무신사 겨울 메가 세일",
-      sourceUrl: "https://www.musinsa.com/events",
-      sourceTitle: "무신사 이벤트",
-      confidence: 0.88,
+      sourceUrl: "https://newsroom.musinsa.com/newsroom-menu/2025-1114",
+      sourceTitle: "무신사 뉴스룸",
+      confidence: 0.76,
       lastVerified: 2,
     },
     {
@@ -54,15 +71,15 @@
       brandId: "29cm",
       title: "이구위크",
       eventType: "fashion-week",
-      startOffset: -2,
-      endOffset: 2,
-      datePrecision: "day",
-      estimated: false,
-      estimationBasis: "공식 이벤트",
+      startOffset: 0,
+      endOffset: 9,
+      datePrecision: "estimated",
+      estimated: true,
+      estimationBasis: "여름/겨울 시즌 패턴 기반",
       description: "29CM 대표 할인 행사",
-      sourceUrl: "https://www.29cm.co.kr/event",
-      sourceTitle: "29CM 이벤트",
-      confidence: 0.84,
+      sourceUrl: "https://newsroom.musinsa.com/newsroom-menu/2025-0616-29cm",
+      sourceTitle: "29CM/무신사 뉴스룸",
+      confidence: 0.74,
       lastVerified: 1,
     },
     {
@@ -102,31 +119,31 @@
       brandId: "11st",
       title: "그랜드십일절",
       eventType: "mega-sale",
-      startOffset: -38,
-      endOffset: -34,
-      datePrecision: "day",
-      estimated: false,
-      estimationBasis: "공식 메인 공지",
+      startOffset: 0,
+      endOffset: 6,
+      datePrecision: "estimated",
+      estimated: true,
+      estimationBasis: "11월 시즌 패턴 기반",
       description: "11번가 대표 행사",
       sourceUrl: "https://www.11st.co.kr/main",
       sourceTitle: "11번가 공지",
-      confidence: 0.95,
-      lastVerified: 32,
+      confidence: 0.72,
+      lastVerified: 2,
     },
     {
       id: "ev-coupang-1",
       brandId: "coupang",
       title: "와우위크",
       eventType: "wow-sale",
-      startOffset: 27,
-      endOffset: 31,
-      datePrecision: "tbd",
+      startOffset: 0,
+      endOffset: 6,
+      datePrecision: "estimated",
       estimated: true,
-      estimationBasis: "공식 티저 대기",
+      estimationBasis: "와우 이벤트 시즌 패턴 기반",
       description: "와우 회원 대상 할인 이벤트",
       sourceUrl: "https://www.coupang.com/",
       sourceTitle: "쿠팡 메인",
-      confidence: 0.4,
+      confidence: 0.58,
       lastVerified: 4,
     },
   ];
@@ -208,12 +225,88 @@
 
   function loadEvents() {
     const saved = loadJson(STORAGE.events, null);
-    if (saved && Array.isArray(saved)) return saved;
+    if (
+      saved &&
+      typeof saved === "object" &&
+      saved.version === EVENT_DATA_VERSION &&
+      Array.isArray(saved.data)
+    ) {
+      return saved.data;
+    }
 
     const today = new Date();
+
+    const nextAnnualDate = (month, day) => {
+      const candidate = new Date(today.getFullYear(), month - 1, day, 12, 0, 0);
+      if (candidate < today) {
+        candidate.setFullYear(candidate.getFullYear() + 1);
+      }
+      return candidate;
+    };
+
+    const nextFromMonths = (months, day) => {
+      const sorted = months.map((month) => nextAnnualDate(month, day)).sort((a, b) => a.getTime() - b.getTime());
+      return sorted[0];
+    };
+
+    const nextOliveyoungDayStart = () => {
+      const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 25, 12, 0, 0);
+      const thisMonthEnd = new Date(today.getFullYear(), today.getMonth(), 27, 23, 59, 59);
+      if (today <= thisMonthEnd) {
+        return thisMonthStart;
+      }
+      return new Date(today.getFullYear(), today.getMonth() + 1, 25, 12, 0, 0);
+    };
+
+    const scheduleForSeed = (seed) => {
+      if (seed.id === "ev-olive-1") {
+        const start = nextFromMonths([3, 6, 9, 12], 1);
+        return { startDate: toYmd(start), endDate: toYmd(addDays(start, 6)) };
+      }
+
+      if (seed.id === "ev-olive-day-1") {
+        const start = nextOliveyoungDayStart();
+        const end = new Date(start.getFullYear(), start.getMonth(), 27, 12, 0, 0);
+        return { startDate: toYmd(start), endDate: toYmd(end) };
+      }
+
+      if (seed.id === "ev-musinsa-1") {
+        const start = nextAnnualDate(11, 16);
+        return { startDate: toYmd(start), endDate: toYmd(addDays(start, 10)) };
+      }
+
+      if (seed.id === "ev-29cm-1") {
+        const start = nextFromMonths([6, 11], 4);
+        return { startDate: toYmd(start), endDate: toYmd(addDays(start, 9)) };
+      }
+
+      if (seed.id === "ev-uniqlo-1") {
+        const start = nextAnnualDate(5, 15);
+        return { startDate: toYmd(start), endDate: toYmd(addDays(start, 6)) };
+      }
+
+      if (seed.id === "ev-gmarket-1") {
+        const start = nextFromMonths([5, 11], 11);
+        return { startDate: toYmd(start), endDate: toYmd(addDays(start, 6)) };
+      }
+
+      if (seed.id === "ev-11st-1") {
+        const start = nextAnnualDate(11, 11);
+        return { startDate: toYmd(start), endDate: toYmd(addDays(start, 6)) };
+      }
+
+      if (seed.id === "ev-coupang-1") {
+        const start = nextFromMonths([4, 11], 1);
+        return { startDate: toYmd(start), endDate: toYmd(addDays(start, 6)) };
+      }
+
+      const startDate = seed.datePrecision === "tbd" ? null : toYmd(addDays(today, seed.startOffset ?? 0));
+      const endDate = seed.datePrecision === "tbd" ? null : toYmd(addDays(today, seed.endOffset ?? 0));
+      return { startDate, endDate };
+    };
+
     const generated = EVENT_SEED.map((seed) => {
-      const startDate = seed.datePrecision === "tbd" ? null : toYmd(addDays(today, seed.startOffset));
-      const endDate = seed.datePrecision === "tbd" ? null : toYmd(addDays(today, seed.endOffset));
+      const { startDate, endDate } = scheduleForSeed(seed);
       return {
         id: seed.id,
         brandId: seed.brandId,
@@ -231,7 +324,7 @@
         lastVerifiedAt: toYmd(addDays(today, -seed.lastVerified)),
       };
     });
-    saveJson(STORAGE.events, generated);
+    saveJson(STORAGE.events, { version: EVENT_DATA_VERSION, data: generated });
     return generated;
   }
 
@@ -495,7 +588,7 @@
   }
 
   function persistEvents() {
-    saveJson(STORAGE.events, state.events);
+    saveJson(STORAGE.events, { version: EVENT_DATA_VERSION, data: state.events });
   }
 
   function openDetail(eventId) {

@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   const STORAGE = {
     favorites: "sc_apk_favorites",
     prefs: "sc_apk_prefs",
@@ -169,7 +169,7 @@
       month: getMonthString(new Date()),
       q: "",
       status: "all",
-      favoriteOnly: false,
+      favoriteOnly: true,
     },
     adminLogs: loadJson(STORAGE.adminLogs, []),
   };
@@ -190,6 +190,18 @@
 
   function getMonthString(date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  }
+
+  function formatMonthLabel(monthValue) {
+    const [year, month] = monthValue.split("-").map(Number);
+    return `${year}년 ${month}월`;
+  }
+
+  function shiftMonth(delta) {
+    const [year, month] = state.filters.month.split("-").map(Number);
+    const next = new Date(year, month - 1 + delta, 1, 12, 0, 0);
+    state.filters.month = getMonthString(next);
+    render();
   }
 
   function toDate(yyyyMmDd) {
@@ -371,6 +383,88 @@
       .sort((a, b) => (a.startDate || "9999-12-31").localeCompare(b.startDate || "9999-12-31"));
   }
 
+    function monthBounds(monthValue) {
+    const [year, month] = monthValue.split("-").map(Number);
+    const start = new Date(year, month - 1, 1, 12, 0, 0);
+    const end = new Date(year, month, 0, 12, 0, 0);
+    return { start, end };
+  }
+
+  function eventOverlapsMonth(event, monthStart, monthEnd) {
+    const start = toDate(event.startDate);
+    if (!start) return false;
+    const end = toDate(event.endDate || event.startDate) || start;
+    return start <= monthEnd && end >= monthStart;
+  }
+
+  function dayInRange(day, event) {
+    const start = toDate(event.startDate);
+    if (!start) return false;
+    const end = toDate(event.endDate || event.startDate) || start;
+    return day >= start && day <= end;
+  }
+
+  function renderCalendarGrid(monthValue, events) {
+    const { start: monthStart } = monthBounds(monthValue);
+    const year = monthStart.getFullYear();
+    const month = monthStart.getMonth();
+    const firstWeekday = monthStart.getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const cells = [];
+    for (let i = 0; i < firstWeekday; i += 1) {
+      cells.push(null);
+    }
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      cells.push(new Date(year, month, day, 12, 0, 0));
+    }
+    while (cells.length % 7 !== 0) {
+      cells.push(null);
+    }
+
+    return `
+      <div class="calendar-grid">
+        <div class="calendar-head">일</div>
+        <div class="calendar-head">월</div>
+        <div class="calendar-head">화</div>
+        <div class="calendar-head">수</div>
+        <div class="calendar-head">목</div>
+        <div class="calendar-head">금</div>
+        <div class="calendar-head">토</div>
+        ${cells
+          .map((cell) => {
+            if (!cell) {
+              return '<div class="calendar-cell empty"></div>';
+            }
+
+            const dayNumber = cell.getDate();
+            const today = new Date();
+            const isToday =
+              today.getFullYear() === cell.getFullYear() &&
+              today.getMonth() === cell.getMonth() &&
+              today.getDate() === cell.getDate();
+            const allDayEvents = events.filter((event) => dayInRange(cell, event));
+            const dayEvents = allDayEvents.slice(0, 3);
+
+            return `
+              <div class="calendar-cell ${isToday ? "today" : ""}">
+                <div class="calendar-day">${dayNumber}</div>
+                <div class="calendar-events">
+                  ${dayEvents
+                    .map(
+                      (event) =>
+                        `<button class="calendar-event ${event.status}" data-action="detail" data-event-id="${event.id}">${event.brandName} · ${event.title}</button>`,
+                    )
+                    .join("")}
+                  ${allDayEvents.length > dayEvents.length ? `<div class="calendar-more">+${allDayEvents.length - dayEvents.length}</div>` : ""}
+                </div>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    `;
+  }
   function showToast(message) {
     toastEl.textContent = message;
     toastEl.classList.add("show");
@@ -444,9 +538,11 @@
     `;
   }
 
-  function renderCalendar() {
+    function renderCalendar() {
+    const { start: monthStart, end: monthEnd } = monthBounds(state.filters.month);
+
     const filtered = listEvents().filter((event) => {
-      if (state.filters.month && event.startDate && !event.startDate.startsWith(state.filters.month)) return false;
+      if (!eventOverlapsMonth(event, monthStart, monthEnd)) return false;
       if (state.filters.status !== "all" && event.status !== state.filters.status) return false;
       if (state.filters.favoriteOnly && !event.isFavorite) return false;
       if (state.filters.q) {
@@ -458,8 +554,13 @@
 
     root.innerHTML = `
       <section class="card">
-        <h2>월간 캘린더/리스트</h2>
-        <p class="muted">월/상태/검색/관심브랜드 필터를 동시에 적용할 수 있습니다.</p>
+        <h2>월간 할인 캘린더</h2>
+        <p class="muted">내가 선택한 샵의 할인 기간을 날짜별로 정리해서 보여줍니다.</p>
+        <div class="month-nav">
+          <button class="ghost month-nav-btn" data-action="month-prev" aria-label="이전 달">이전</button>
+          <div class="month-title">${formatMonthLabel(state.filters.month)}</div>
+          <button class="ghost month-nav-btn" data-action="month-next" aria-label="다음 달">다음</button>
+        </div>
         <div class="grid-2">
           <label><span class="muted">월</span><input type="month" id="filter-month" value="${state.filters.month}" /></label>
           <label>
@@ -473,18 +574,23 @@
           </label>
         </div>
         <div class="row" style="margin-top:8px">
-          <input id="filter-q" placeholder="브랜드/행사명 검색" value="${escapeHtml(state.filters.q)}" />
-          <label class="row" style="width:auto"><input type="checkbox" id="filter-favorite" ${state.filters.favoriteOnly ? "checked" : ""} /><span class="muted">관심 브랜드만</span></label>
+          <input id="filter-q" placeholder="샵/행사명 검색" value="${escapeHtml(state.filters.q)}" />
+          <label class="row" style="width:auto"><input type="checkbox" id="filter-favorite" ${state.filters.favoriteOnly ? "checked" : ""} /><span class="muted">선택한 샵만</span></label>
         </div>
       </section>
 
+      <section class="card calendar-swipe-area">
+        <div class="section-head"><h3>캘린더 보기</h3><span class="muted">${filtered.length}건</span></div>
+        <p class="muted swipe-hint">위/아래로 스와이프해서 월 이동</p>
+        ${renderCalendarGrid(state.filters.month, filtered)}
+      </section>
+
       <section class="card">
-        <div class="section-head"><h3>행사 목록</h3><span class="muted">${filtered.length}건</span></div>
+        <div class="section-head"><h3>선택 월 행사 목록</h3><span class="muted">${filtered.length}건</span></div>
         <div class="event-list">${filtered.map(renderEventCard).join("") || '<p class="muted">조건에 맞는 행사가 없습니다.</p>'}</div>
       </section>
     `;
   }
-
   function renderUpcoming() {
     const events = listEvents().filter((event) => event.status === "scheduled");
     root.innerHTML = `
@@ -746,6 +852,61 @@
     });
   });
 
+  let touchStartY = 0;
+  let touchStartX = 0;
+  let touchStartAt = 0;
+
+  root.addEventListener(
+    "touchstart",
+    (event) => {
+      if (state.view !== "calendar") return;
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (!target.closest(".calendar-swipe-area")) return;
+
+      const point = event.touches[0];
+      touchStartY = point.clientY;
+      touchStartX = point.clientX;
+      touchStartAt = Date.now();
+    },
+    { passive: true },
+  );
+
+  root.addEventListener(
+    "touchend",
+    (event) => {
+      if (state.view !== "calendar") return;
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (!target.closest(".calendar-swipe-area")) return;
+
+      const point = event.changedTouches[0];
+      const deltaY = point.clientY - touchStartY;
+      const deltaX = point.clientX - touchStartX;
+      const elapsed = Date.now() - touchStartAt;
+
+      const isVerticalSwipe = Math.abs(deltaY) > 56 && Math.abs(deltaY) > Math.abs(deltaX) * 1.25 && elapsed < 700;
+      if (!isVerticalSwipe) return;
+
+      if (deltaY < 0) {
+        shiftMonth(1);
+      } else {
+        shiftMonth(-1);
+      }
+    },
+    { passive: true },
+  );
+
   document.getElementById("build-badge").textContent = `APK ${new Date().toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}`;
   render();
 })();
+
+    if (action === "month-prev") {
+      shiftMonth(-1);
+      return;
+    }
+
+    if (action === "month-next") {
+      shiftMonth(1);
+      return;
+    }

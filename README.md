@@ -34,7 +34,7 @@ npm run dev
 
 ## Android APK
 - Generated debug APK path: `artifacts/android/sale-calendar-debug.apk`
-- Latest debug APK version: `1.0.4` (`versionCode 5`, built on 2026-04-20)
+- Latest debug APK version: `1.0.5` (`versionCode 6`, built on 2026-04-20)
 - Current APK includes offline demo flows:
   - Home / Calendar / Upcoming tabs
   - Favorite brand save

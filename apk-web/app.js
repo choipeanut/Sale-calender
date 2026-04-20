@@ -758,6 +758,16 @@
 
     if (action === "detail" && target.dataset.eventId) return openDetail(target.dataset.eventId);
 
+    if (action === "month-prev") {
+      shiftMonth(-1);
+      return;
+    }
+
+    if (action === "month-next") {
+      shiftMonth(1);
+      return;
+    }
+
     if (action === "toggle-favorite" && target.dataset.brandId) {
       if (state.favorites.has(target.dataset.brandId)) state.favorites.delete(target.dataset.brandId);
       else state.favorites.add(target.dataset.brandId);
@@ -900,13 +910,3 @@
   document.getElementById("build-badge").textContent = `APK ${new Date().toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}`;
   render();
 })();
-
-    if (action === "month-prev") {
-      shiftMonth(-1);
-      return;
-    }
-
-    if (action === "month-next") {
-      shiftMonth(1);
-      return;
-    }

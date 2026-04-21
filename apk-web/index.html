@@ -8,30 +8,22 @@
   </head>
   <body>
     <div class="app-shell">
-      <header class="app-header">
-        <div>
-          <h1>Sale Calendar</h1>
-          <p class="subtitle">오프라인 동작 데모 APK</p>
-        </div>
-        <span class="chip" id="build-badge"></span>
-      </header>
-
       <main id="view-root" class="view-root" aria-live="polite"></main>
-
-      <nav class="bottom-nav" aria-label="주요 메뉴">
-        <button data-view="home" class="active">홈</button>
-        <button data-view="calendar">캘린더</button>
-        <button data-view="upcoming">다가오는</button>
-        <button data-view="settings">설정</button>
-        <button data-view="admin">관리자</button>
-      </nav>
     </div>
+
+    <dialog id="shop-dialog" class="sheet-dialog">
+      <article id="shop-dialog-content"></article>
+      <div class="dialog-actions">
+        <button class="ghost" value="cancel">닫기</button>
+        <button type="button" data-action="save-shop-selection">샵 선택 저장</button>
+      </div>
+    </dialog>
 
     <dialog id="detail-modal" class="detail-modal">
       <article id="detail-content"></article>
-      <form method="dialog" class="dialog-actions">
-        <button>닫기</button>
-      </form>
+      <div class="dialog-actions">
+        <button class="ghost" value="cancel">닫기</button>
+      </div>
     </dialog>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>

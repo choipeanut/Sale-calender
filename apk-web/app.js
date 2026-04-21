@@ -5,13 +5,14 @@
     events: "sc_apk_events",
     adminLogs: "sc_apk_admin_logs",
   };
-  const EVENT_DATA_VERSION = 2;
+  const EVENT_DATA_VERSION = 3;
 
   const BRANDS = [
     { id: "oliveyoung", name: "올리브영", category: "뷰티", site: "https://www.oliveyoung.co.kr/" },
     { id: "musinsa", name: "무신사", category: "패션", site: "https://www.musinsa.com/" },
     { id: "29cm", name: "29CM", category: "패션", site: "https://www.29cm.co.kr/" },
     { id: "uniqlo", name: "유니클로", category: "SPA", site: "https://www.uniqlo.com/kr/ko/" },
+    { id: "zara", name: "자라", category: "패션", site: "https://www.zara.com/kr/" },
     { id: "gmarket", name: "G마켓", category: "종합몰", site: "https://www.gmarket.co.kr/" },
     { id: "11st", name: "11번가", category: "종합몰", site: "https://www.11st.co.kr/" },
     { id: "coupang", name: "쿠팡", category: "종합몰", site: "https://www.coupang.com/" },
@@ -99,6 +100,22 @@
       lastVerified: 3,
     },
     {
+      id: "ev-zara-1",
+      brandId: "zara",
+      title: "자라 시즌오프 세일",
+      eventType: "season-off",
+      startOffset: 0,
+      endOffset: 12,
+      datePrecision: "estimated",
+      estimated: true,
+      estimationBasis: "상/하반기 시즌오프(6월/12월) 패턴",
+      description: "자라 코리아 시즌오프 대표 할인 행사",
+      sourceUrl: "https://www.zara.com/kr/",
+      sourceTitle: "ZARA KR 공식 사이트",
+      confidence: 0.64,
+      lastVerified: 1,
+    },
+    {
       id: "ev-gmarket-1",
       brandId: "gmarket",
       title: "빅스마일데이",
@@ -156,7 +173,7 @@
 
   const state = {
     view: "home",
-    favorites: new Set(loadJson(STORAGE.favorites, ["oliveyoung", "musinsa", "29cm"])),
+    favorites: new Set(loadJson(STORAGE.favorites, ["oliveyoung", "musinsa", "29cm", "zara"])),
     prefs: loadJson(STORAGE.prefs, {
       enabled: true,
       notify7: true,
@@ -236,17 +253,18 @@
   }
 
   function loadEvents() {
+    const today = new Date();
+    const refreshedOn = toYmd(today);
     const saved = loadJson(STORAGE.events, null);
     if (
       saved &&
       typeof saved === "object" &&
       saved.version === EVENT_DATA_VERSION &&
-      Array.isArray(saved.data)
+      Array.isArray(saved.data) &&
+      saved.refreshedOn === refreshedOn
     ) {
       return saved.data;
     }
-
-    const today = new Date();
 
     const nextAnnualDate = (month, day) => {
       const candidate = new Date(today.getFullYear(), month - 1, day, 12, 0, 0);
@@ -297,6 +315,11 @@
         return { startDate: toYmd(start), endDate: toYmd(addDays(start, 6)) };
       }
 
+      if (seed.id === "ev-zara-1") {
+        const start = nextFromMonths([6, 12], 20);
+        return { startDate: toYmd(start), endDate: toYmd(addDays(start, 12)) };
+      }
+
       if (seed.id === "ev-gmarket-1") {
         const start = nextFromMonths([5, 11], 11);
         return { startDate: toYmd(start), endDate: toYmd(addDays(start, 6)) };
@@ -336,7 +359,7 @@
         lastVerifiedAt: toYmd(addDays(today, -seed.lastVerified)),
       };
     });
-    saveJson(STORAGE.events, { version: EVENT_DATA_VERSION, data: generated });
+    saveJson(STORAGE.events, { version: EVENT_DATA_VERSION, refreshedOn, data: generated });
     return generated;
   }
 
@@ -990,6 +1013,27 @@
     },
     { passive: true },
   );
+
+  function refreshEventsIfNeeded() {
+    const before = loadJson(STORAGE.events, null);
+    const beforeRefreshedOn = before && typeof before === "object" ? before.refreshedOn : null;
+    const refreshedEvents = loadEvents();
+    const after = loadJson(STORAGE.events, null);
+    const afterRefreshedOn = after && typeof after === "object" ? after.refreshedOn : null;
+
+    if (afterRefreshedOn && afterRefreshedOn !== beforeRefreshedOn) {
+      state.events = refreshedEvents;
+      showToast(`행사 데이터를 ${afterRefreshedOn} 기준으로 갱신했습니다.`);
+      render();
+    }
+  }
+
+  window.setInterval(refreshEventsIfNeeded, 60 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      refreshEventsIfNeeded();
+    }
+  });
 
   document.getElementById("build-badge").textContent = `APK ${new Date().toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}`;
   render();

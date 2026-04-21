@@ -1,10 +1,11 @@
 ﻿(function () {
   const STORAGE = {
     favorites: "sc_apk_favorites",
+    prefs: "sc_apk_prefs",
     events: "sc_apk_events",
+    adminLogs: "sc_apk_admin_logs",
   };
-
-  const EVENT_DATA_VERSION = 3;
+  const EVENT_DATA_VERSION = 2;
 
   const BRANDS = [
     { id: "oliveyoung", name: "올리브영", category: "뷰티", site: "https://www.oliveyoung.co.kr/" },
@@ -22,6 +23,8 @@
       brandId: "oliveyoung",
       title: "올영세일",
       eventType: "season-sale",
+      startOffset: 0,
+      endOffset: 6,
       datePrecision: "estimated",
       estimated: true,
       estimationBasis: "분기 정기 패턴(3/6/9/12월)",
@@ -36,6 +39,8 @@
       brandId: "oliveyoung",
       title: "올영데이",
       eventType: "monthly-membership-sale",
+      startOffset: 0,
+      endOffset: 2,
       datePrecision: "estimated",
       estimated: true,
       estimationBasis: "운영 규칙(매월 25~27일)",
@@ -50,11 +55,13 @@
       brandId: "musinsa",
       title: "무진장 겨울 블랙프라이데이",
       eventType: "blackfriday",
+      startOffset: 0,
+      endOffset: 10,
       datePrecision: "estimated",
       estimated: true,
       estimationBasis: "무신사 뉴스룸 기반 11월 중순 패턴",
       description: "무신사 겨울 메가 세일",
-      sourceUrl: "https://newsroom.musinsa.com/",
+      sourceUrl: "https://newsroom.musinsa.com/newsroom-menu/2025-1114",
       sourceTitle: "무신사 뉴스룸",
       confidence: 0.76,
       lastVerified: 2,
@@ -64,13 +71,15 @@
       brandId: "29cm",
       title: "이구위크",
       eventType: "fashion-week",
+      startOffset: 0,
+      endOffset: 9,
       datePrecision: "estimated",
       estimated: true,
-      estimationBasis: "과거 시즌 패턴 기반",
+      estimationBasis: "여름/겨울 시즌 패턴 기반",
       description: "29CM 대표 할인 행사",
-      sourceUrl: "https://www.29cm.co.kr/",
-      sourceTitle: "29CM 사이트",
-      confidence: 0.62,
+      sourceUrl: "https://newsroom.musinsa.com/newsroom-menu/2025-0616-29cm",
+      sourceTitle: "29CM/무신사 뉴스룸",
+      confidence: 0.74,
       lastVerified: 1,
     },
     {
@@ -78,6 +87,8 @@
       brandId: "uniqlo",
       title: "유니클로 감사제",
       eventType: "appreciation-sale",
+      startOffset: 18,
+      endOffset: 21,
       datePrecision: "estimated",
       estimated: true,
       estimationBasis: "최근 3년 패턴",
@@ -92,6 +103,8 @@
       brandId: "gmarket",
       title: "빅스마일데이",
       eventType: "mega-sale",
+      startOffset: 12,
+      endOffset: 18,
       datePrecision: "estimated",
       estimated: true,
       estimationBasis: "작년 패턴 + 티저",
@@ -106,6 +119,8 @@
       brandId: "11st",
       title: "그랜드십일절",
       eventType: "mega-sale",
+      startOffset: 0,
+      endOffset: 6,
       datePrecision: "estimated",
       estimated: true,
       estimationBasis: "11월 시즌 패턴 기반",
@@ -120,6 +135,8 @@
       brandId: "coupang",
       title: "와우위크",
       eventType: "wow-sale",
+      startOffset: 0,
+      endOffset: 6,
       datePrecision: "estimated",
       estimated: true,
       estimationBasis: "와우 이벤트 시즌 패턴 기반",
@@ -134,14 +151,27 @@
   const root = document.getElementById("view-root");
   const modal = document.getElementById("detail-modal");
   const modalContent = document.getElementById("detail-content");
-  const shopDialog = document.getElementById("shop-dialog");
-  const shopDialogContent = document.getElementById("shop-dialog-content");
   const toastEl = document.getElementById("toast");
+  const navButtons = Array.from(document.querySelectorAll(".bottom-nav button"));
 
   const state = {
-    month: getMonthString(new Date()),
+    view: "home",
     favorites: new Set(loadJson(STORAGE.favorites, ["oliveyoung", "musinsa", "29cm"])),
+    prefs: loadJson(STORAGE.prefs, {
+      enabled: true,
+      notify7: true,
+      notify1: true,
+      notifyStart: true,
+      customMinutes: 180,
+    }),
     events: loadEvents(),
+    filters: {
+      month: getMonthString(new Date()),
+      q: "",
+      status: "all",
+      favoriteOnly: true,
+    },
+    adminLogs: loadJson(STORAGE.adminLogs, []),
   };
 
   function loadJson(key, fallback) {
@@ -167,24 +197,11 @@
     return `${year}년 ${month}월`;
   }
 
-  function monthOffset(monthValue, delta) {
-    const [year, month] = monthValue.split("-").map(Number);
-    return getMonthString(new Date(year, month - 1 + delta, 1, 12, 0, 0));
-  }
-
   function shiftMonth(delta) {
-    state.month = monthOffset(state.month, delta);
+    const [year, month] = state.filters.month.split("-").map(Number);
+    const next = new Date(year, month - 1 + delta, 1, 12, 0, 0);
+    state.filters.month = getMonthString(next);
     render();
-  }
-
-  function addDays(baseDate, diff) {
-    const d = new Date(baseDate);
-    d.setDate(d.getDate() + diff);
-    return d;
-  }
-
-  function toYmd(date) {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   }
 
   function toDate(yyyyMmDd) {
@@ -208,6 +225,16 @@
     return `${formatDate(startDate)} ~ ${formatDate(endDate)}`;
   }
 
+  function addDays(baseDate, diff) {
+    const d = new Date(baseDate);
+    d.setDate(d.getDate() + diff);
+    return d;
+  }
+
+  function toYmd(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }
+
   function loadEvents() {
     const saved = loadJson(STORAGE.events, null);
     if (
@@ -219,27 +246,28 @@
       return saved.data;
     }
 
-    const now = new Date();
+    const today = new Date();
 
     const nextAnnualDate = (month, day) => {
-      const candidate = new Date(now.getFullYear(), month - 1, day, 12, 0, 0);
-      if (candidate < now) {
+      const candidate = new Date(today.getFullYear(), month - 1, day, 12, 0, 0);
+      if (candidate < today) {
         candidate.setFullYear(candidate.getFullYear() + 1);
       }
       return candidate;
     };
 
     const nextFromMonths = (months, day) => {
-      return months
-        .map((month) => nextAnnualDate(month, day))
-        .sort((a, b) => a.getTime() - b.getTime())[0];
+      const sorted = months.map((month) => nextAnnualDate(month, day)).sort((a, b) => a.getTime() - b.getTime());
+      return sorted[0];
     };
 
     const nextOliveyoungDayStart = () => {
-      const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 25, 12, 0, 0);
-      const thisMonthEnd = new Date(now.getFullYear(), now.getMonth(), 27, 23, 59, 59);
-      if (now <= thisMonthEnd) return thisMonthStart;
-      return new Date(now.getFullYear(), now.getMonth() + 1, 25, 12, 0, 0);
+      const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 25, 12, 0, 0);
+      const thisMonthEnd = new Date(today.getFullYear(), today.getMonth(), 27, 23, 59, 59);
+      if (today <= thisMonthEnd) {
+        return thisMonthStart;
+      }
+      return new Date(today.getFullYear(), today.getMonth() + 1, 25, 12, 0, 0);
     };
 
     const scheduleForSeed = (seed) => {
@@ -284,7 +312,9 @@
         return { startDate: toYmd(start), endDate: toYmd(addDays(start, 6)) };
       }
 
-      return { startDate: null, endDate: null };
+      const startDate = seed.datePrecision === "tbd" ? null : toYmd(addDays(today, seed.startOffset ?? 0));
+      const endDate = seed.datePrecision === "tbd" ? null : toYmd(addDays(today, seed.endOffset ?? 0));
+      return { startDate, endDate };
     };
 
     const generated = EVENT_SEED.map((seed) => {
@@ -303,10 +333,9 @@
         sourceUrl: seed.sourceUrl,
         sourceTitle: seed.sourceTitle,
         confidence: seed.confidence,
-        lastVerifiedAt: toYmd(addDays(now, -seed.lastVerified)),
+        lastVerifiedAt: toYmd(addDays(today, -seed.lastVerified)),
       };
     });
-
     saveJson(STORAGE.events, { version: EVENT_DATA_VERSION, data: generated });
     return generated;
   }
@@ -361,6 +390,11 @@
     return { start, end };
   }
 
+  function monthOffset(monthValue, delta) {
+    const [year, month] = monthValue.split("-").map(Number);
+    return getMonthString(new Date(year, month - 1 + delta, 1, 12, 0, 0));
+  }
+
   function eventOverlapsMonth(event, monthStart, monthEnd) {
     const start = toDate(event.startDate);
     if (!start) return false;
@@ -375,26 +409,37 @@
     return day >= start && day <= end;
   }
 
-  function eventsForMonth(monthValue) {
-    const { start, end } = monthBounds(monthValue);
-    const source = listEvents();
-    const scoped = state.favorites.size > 0 ? source.filter((event) => state.favorites.has(event.brandId)) : source;
-    return scoped.filter((event) => eventOverlapsMonth(event, start, end));
+  function filteredEventsForMonth(monthValue) {
+    const { start: monthStart, end: monthEnd } = monthBounds(monthValue);
+    return listEvents().filter((event) => {
+      if (!eventOverlapsMonth(event, monthStart, monthEnd)) return false;
+      if (state.filters.status !== "all" && event.status !== state.filters.status) return false;
+      if (state.filters.favoriteOnly && !event.isFavorite) return false;
+      if (state.filters.q) {
+        const q = state.filters.q.toLowerCase();
+        return event.title.toLowerCase().includes(q) || event.brandName.toLowerCase().includes(q);
+      }
+      return true;
+    });
   }
 
   function buildCalendarRows(monthValue) {
-    const { start } = monthBounds(monthValue);
-    const year = start.getFullYear();
-    const month = start.getMonth();
-    const firstWeekday = start.getDay();
+    const { start: monthStart } = monthBounds(monthValue);
+    const year = monthStart.getFullYear();
+    const month = monthStart.getMonth();
+    const firstWeekday = monthStart.getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
     const cells = [];
-    for (let i = 0; i < firstWeekday; i += 1) cells.push(null);
+    for (let i = 0; i < firstWeekday; i += 1) {
+      cells.push(null);
+    }
     for (let day = 1; day <= daysInMonth; day += 1) {
       cells.push(new Date(year, month, day, 12, 0, 0));
     }
-    while (cells.length % 7 !== 0) cells.push(null);
+    while (cells.length % 7 !== 0) {
+      cells.push(null);
+    }
 
     const rows = [];
     for (let i = 0; i < cells.length; i += 7) {
@@ -403,79 +448,52 @@
     return rows;
   }
 
-  function renderGhostStrip(monthValue, monthEvents, direction) {
-    const rows = buildCalendarRows(monthValue);
-    const segment = direction === "prev" ? rows.slice(-2) : rows.slice(0, 2);
-    const opacities = direction === "prev" ? [0.32, 0.56] : [0.56, 0.32];
-    const action = direction === "prev" ? "month-prev" : "month-next";
-    const label = direction === "prev" ? "이전 월 미리보기" : "다음 월 미리보기";
-
-    return `
-      <button type="button" class="calendar-ghost-strip ${direction}" data-action="${action}" aria-label="${label}">
-        <div class="ghost-grid" aria-hidden="true">
-          ${segment
-            .map((week, rowIndex) => {
-              return `
-                <div class="ghost-row" style="--ghost-opacity:${opacities[rowIndex] || 0.35}">
-                  ${week
-                    .map((cell) => {
-                      if (!cell) return '<div class="ghost-cell empty"></div>';
-                      const hasEvent = monthEvents.some((event) => dayInRange(cell, event));
-                      return `
-                        <div class="ghost-cell ${hasEvent ? "active" : ""}">
-                          <span>${cell.getDate()}</span>
-                        </div>
-                      `;
-                    })
-                    .join("")}
-                </div>
-              `;
-            })
-            .join("")}
-        </div>
-      </button>
-    `;
-  }
-
   function shortBrandLabel(name) {
     if (name.length <= 3) return name;
     return `${name.slice(0, 2)}.`;
   }
 
-  function renderCalendarGrid(monthValue, monthEvents) {
+  function renderCalendarGrid(monthValue, events) {
     const rows = buildCalendarRows(monthValue);
 
     return `
-      <div class="calendar-weekheads">
-        <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+      <div class="calendar-cute-weekheads">
+        <span>일</span>
+        <span>월</span>
+        <span>화</span>
+        <span>수</span>
+        <span>목</span>
+        <span>금</span>
+        <span>토</span>
       </div>
-      <div class="calendar-grid">
+      <div class="calendar-grid calendar-cute-grid">
         ${rows
           .flat()
           .map((cell) => {
-            if (!cell) return '<div class="calendar-cell empty"></div>';
+            if (!cell) {
+              return '<div class="calendar-cell empty"></div>';
+            }
 
-            const dayEvents = monthEvents.filter((event) => dayInRange(cell, event));
-            const visibleEvents = dayEvents.slice(0, 2);
-            const extraCount = dayEvents.length - visibleEvents.length;
-
-            const now = new Date();
+            const dayNumber = cell.getDate();
+            const today = new Date();
             const isToday =
-              now.getFullYear() === cell.getFullYear() &&
-              now.getMonth() === cell.getMonth() &&
-              now.getDate() === cell.getDate();
+              today.getFullYear() === cell.getFullYear() &&
+              today.getMonth() === cell.getMonth() &&
+              today.getDate() === cell.getDate();
+            const allDayEvents = events.filter((event) => dayInRange(cell, event));
+            const dayEvents = allDayEvents.slice(0, 2);
 
             return `
-              <div class="calendar-cell ${dayEvents.length ? "has-events" : ""} ${isToday ? "today" : ""}">
-                <div class="calendar-day">${cell.getDate()}</div>
-                <div class="calendar-pill-wrap">
-                  ${visibleEvents
+              <div class="calendar-cell calendar-cute-cell ${allDayEvents.length > 0 ? "has-events" : ""} ${isToday ? "today" : ""}">
+                <div class="calendar-day">${dayNumber}</div>
+                <div class="calendar-events calendar-cute-events">
+                  ${dayEvents
                     .map(
                       (event) =>
-                        `<button type="button" class="calendar-pill ${event.status}" data-action="detail" data-event-id="${event.id}">${escapeHtml(shortBrandLabel(event.brandName))}</button>`,
+                        `<button class="calendar-event calendar-cute-event ${event.status}" data-action="detail" data-event-id="${event.id}">${escapeHtml(shortBrandLabel(event.brandName))}</button>`,
                     )
                     .join("")}
-                  ${extraCount > 0 ? `<span class="calendar-extra">+${extraCount}</span>` : ""}
+                  ${allDayEvents.length > dayEvents.length ? `<div class="calendar-more">+${allDayEvents.length - dayEvents.length}</div>` : ""}
                 </div>
               </div>
             `;
@@ -484,26 +502,251 @@
       </div>
     `;
   }
+  function showToast(message) {
+    toastEl.textContent = message;
+    toastEl.classList.add("show");
+    window.clearTimeout(showToast.timer);
+    showToast.timer = window.setTimeout(() => toastEl.classList.remove("show"), 1800);
+  }
 
-  function renderShopDialog() {
-    const items = BRANDS.map((brand) => {
-      const checked = state.favorites.has(brand.id) ? "checked" : "";
-      return `
-        <label class="shop-item">
-          <input type="checkbox" data-brand-checkbox="${brand.id}" ${checked} />
-          <div class="shop-item-text">
-            <strong>${brand.name}</strong>
-            <span>${brand.category}</span>
+  function renderGhostCalendarGrid(monthValue, events, direction) {
+    const rows = buildCalendarRows(monthValue);
+    const previewRows = direction === "previous" ? rows.slice(-2) : rows.slice(0, 2);
+    const rowOpacity = direction === "previous" ? [0.35, 0.58] : [0.58, 0.35];
+
+    return `
+      <div class="calendar-ghost-grid calendar-ghost-strip" aria-hidden="true">
+        ${previewRows
+          .map(
+            (week, rowIndex) => `
+              <div class="calendar-ghost-row" style="--ghost-opacity:${rowOpacity[rowIndex] || 0.35}">
+                ${week
+                  .map((cell) => {
+                    if (!cell) {
+                      return '<div class="calendar-ghost-cell empty"></div>';
+                    }
+                    const hasEvent = events.some((event) => dayInRange(cell, event));
+                    return `
+                      <div class="calendar-ghost-cell ${hasEvent ? "active" : ""}">
+                        <span class="calendar-ghost-date">${cell.getDate()}</span>
+                      </div>
+                    `;
+                  })
+                  .join("")}
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+    `;
+  }
+
+  function renderEventCard(event) {
+    return `
+      <article class="event">
+        <div class="event-top">
+          <div>
+            <div class="event-title">${event.title}</div>
+            <div class="muted">${event.brandName}</div>
           </div>
-        </label>
-      `;
+          <span class="badge ${event.status}">${statusLabel(event.status)}</span>
+        </div>
+        <div class="event-meta">
+          <span>${formatRange(event.startDate, event.endDate)}</span>
+          <span>·</span>
+          <span>${event.eventType}</span>
+          <span>·</span>
+          <span>${event.category}</span>
+        </div>
+        <div class="pills">
+          <span class="pill">${precisionLabel(event)}</span>
+          ${event.isFavorite ? '<span class="pill">관심 브랜드</span>' : ""}
+          ${event.sourceUrl ? '<span class="pill">출처 링크</span>' : ""}
+        </div>
+        <div class="row">
+          <button class="small ghost" data-action="detail" data-event-id="${event.id}">상세 보기</button>
+          <button class="small" data-action="toggle-favorite" data-brand-id="${event.brandId}">
+            ${event.isFavorite ? "관심 해제" : "관심 등록"}
+          </button>
+        </div>
+      </article>
+    `;
+  }
+
+  function renderHome() {
+    const events = listEvents();
+    const upcoming = events.filter((item) => item.status === "scheduled").slice(0, 4);
+    const ongoing = events.filter((item) => item.status === "ongoing").slice(0, 4);
+    const favoriteOnly = events.filter((item) => item.isFavorite).slice(0, 4);
+
+    root.innerHTML = `
+      <section class="card">
+        <h2>실동작 APK 대시보드</h2>
+        <p class="muted">로컬 저장 기반으로 캘린더/즐겨찾기/알림설정/관리자 기능이 동작합니다.</p>
+        <div class="metrics">
+          <div class="metric"><div class="value">${events.length}</div><div class="label">총 행사</div></div>
+          <div class="metric"><div class="value">${upcoming.length}</div><div class="label">예정 행사</div></div>
+          <div class="metric"><div class="value">${state.favorites.size}</div><div class="label">관심 브랜드</div></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-head"><h3>곧 시작하는 행사</h3></div>
+        <div class="event-list">${upcoming.map(renderEventCard).join("") || '<p class="muted">예정 행사가 없습니다.</p>'}</div>
+      </section>
+
+      <section class="card">
+        <div class="section-head"><h3>진행 중인 행사</h3></div>
+        <div class="event-list">${ongoing.map(renderEventCard).join("") || '<p class="muted">진행 중인 행사가 없습니다.</p>'}</div>
+      </section>
+
+      <section class="card">
+        <div class="section-head"><h3>관심 브랜드 행사</h3></div>
+        <div class="event-list">${favoriteOnly.map(renderEventCard).join("") || '<p class="muted">관심 브랜드를 선택해 주세요.</p>'}</div>
+      </section>
+    `;
+  }
+
+  function renderCalendar() {
+    const currentMonth = state.filters.month;
+    const prevMonth = monthOffset(currentMonth, -1);
+    const nextMonth = monthOffset(currentMonth, 1);
+    const filtered = filteredEventsForMonth(currentMonth);
+    const prevEvents = filteredEventsForMonth(prevMonth);
+    const nextEvents = filteredEventsForMonth(nextMonth);
+    const favoriteSummary = state.favorites.size > 0 ? `${state.favorites.size}개 샵 선택됨` : "전체 샵 표시";
+
+    root.innerHTML = `
+      <section class="card calendar-cute-shell">
+        <div class="month-nav calendar-cute-month-nav">
+          <button class="ghost month-nav-btn calendar-cute-month-btn" data-action="month-prev" aria-label="이전 달">‹</button>
+          <div>
+            <div class="calendar-cute-subtitle">${favoriteSummary}</div>
+            <div class="month-title calendar-cute-title">${formatMonthLabel(state.filters.month)}</div>
+          </div>
+          <button class="ghost month-nav-btn calendar-cute-month-btn" data-action="month-next" aria-label="다음 달">›</button>
+        </div>
+
+        <section class="calendar-swipe-area calendar-cute-swipe-area" data-swipe-zone="true">
+          <button type="button" class="calendar-ghost previous" data-action="month-prev" aria-label="이전 월 보기">
+            ${renderGhostCalendarGrid(prevMonth, prevEvents, "previous")}
+          </button>
+          ${renderCalendarGrid(currentMonth, filtered)}
+          <button type="button" class="calendar-ghost next" data-action="month-next" aria-label="다음 월 보기">
+            ${renderGhostCalendarGrid(nextMonth, nextEvents, "next")}
+          </button>
+        </section>
+
+        <div class="calendar-cute-actions">
+          <button class="shop-shortcut" data-action="open-settings-tab">샵 선택</button>
+        </div>
+      </section>
+    `;
+  }
+  function renderUpcoming() {
+    const events = listEvents().filter((event) => event.status === "scheduled");
+    root.innerHTML = `
+      <section class="card">
+        <h2>다가오는 행사</h2>
+        <p class="muted">시작 예정 순으로 정렬됩니다.</p>
+        <div class="event-list">${events.map(renderEventCard).join("") || '<p class="muted">예정된 행사가 없습니다.</p>'}</div>
+      </section>
+    `;
+  }
+
+  function renderSettings() {
+    const brandItems = BRANDS.map((brand) => {
+      const checked = state.favorites.has(brand.id) ? "checked" : "";
+      return `<label class="brand-item"><input type="checkbox" data-setting="favorite-brand" value="${brand.id}" ${checked} /><div><div>${brand.name}</div><div class="muted">${brand.category}</div></div></label>`;
     }).join("");
 
-    shopDialogContent.innerHTML = `
-      <h2>샵 선택</h2>
-      <p class="muted">선택한 샵의 할인 기간만 캘린더에 표시됩니다.</p>
-      <div class="shop-grid">${items}</div>
+    root.innerHTML = `
+      <section class="card">
+        <h2>관심 브랜드 설정</h2>
+        <p class="muted">홈 개인화와 알림 대상 계산에 사용됩니다.</p>
+        <div class="brand-grid">${brandItems}</div>
+        <div class="row" style="margin-top:10px"><button data-action="save-favorites">관심 브랜드 저장</button></div>
+      </section>
+
+      <section class="card">
+        <h2>알림 설정</h2>
+        <p class="muted">웹푸시 대신 로컬 시뮬레이션 로그로 동작합니다.</p>
+        <label class="row"><input type="checkbox" id="pref-enabled" ${state.prefs.enabled ? "checked" : ""} /><span>전체 알림 사용</span></label>
+        <label class="row"><input type="checkbox" id="pref-7" ${state.prefs.notify7 ? "checked" : ""} /><span>시작 7일 전</span></label>
+        <label class="row"><input type="checkbox" id="pref-1" ${state.prefs.notify1 ? "checked" : ""} /><span>시작 1일 전</span></label>
+        <label class="row"><input type="checkbox" id="pref-start" ${state.prefs.notifyStart ? "checked" : ""} /><span>시작 당일</span></label>
+        <label><span class="muted">커스텀(분 전)</span><input type="number" id="pref-custom" value="${state.prefs.customMinutes}" min="0" /></label>
+        <div class="row" style="margin-top:10px">
+          <button data-action="save-prefs">알림 설정 저장</button>
+          <button class="secondary" data-action="simulate-notification">알림 시뮬레이션</button>
+        </div>
+      </section>
     `;
+  }
+
+  function renderAdmin() {
+    const rows = listEvents()
+      .map((event) => {
+        return `
+      <tr>
+        <td>${event.brandName}</td>
+        <td><input data-admin="title" data-id="${event.id}" value="${escapeHtml(event.title)}" /></td>
+        <td><input type="date" data-admin="startDate" data-id="${event.id}" value="${event.startDate || ""}" /></td>
+        <td><input type="date" data-admin="endDate" data-id="${event.id}" value="${event.endDate || ""}" /></td>
+        <td>
+          <select data-admin="datePrecision" data-id="${event.id}">
+            <option value="day" ${event.datePrecision === "day" ? "selected" : ""}>day</option>
+            <option value="month" ${event.datePrecision === "month" ? "selected" : ""}>month</option>
+            <option value="estimated" ${event.datePrecision === "estimated" ? "selected" : ""}>estimated</option>
+            <option value="tbd" ${event.datePrecision === "tbd" ? "selected" : ""}>tbd</option>
+          </select>
+        </td>
+        <td><button class="small" data-action="admin-save" data-id="${event.id}">저장</button></td>
+      </tr>`;
+      })
+      .join("");
+
+    const logs = state.adminLogs.slice(-6).reverse();
+
+    root.innerHTML = `
+      <section class="card">
+        <h2>관리자 대시보드</h2>
+        <p class="muted">날짜 수정/정밀도 조정/중복 분석이 로컬 데이터에 반영됩니다.</p>
+        <div class="row">
+          <button data-action="admin-run-ingest">수집 재실행 시뮬레이션</button>
+          <button class="warn" data-action="admin-dedupe">중복 후보 분석</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th>브랜드</th><th>행사명</th><th>시작일</th><th>종료일</th><th>정밀도</th><th>저장</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>운영 로그</h3>
+        <div class="event-list">
+          ${logs.map((line) => `<div class="event"><div class="muted">${escapeHtml(line)}</div></div>`).join("") || '<p class="muted">로그가 없습니다.</p>'}
+        </div>
+      </section>
+    `;
+  }
+
+  function render() {
+    navButtons.forEach((button) => button.classList.toggle("active", button.dataset.view === state.view));
+    if (state.view === "home") return renderHome();
+    if (state.view === "calendar") return renderCalendar();
+    if (state.view === "upcoming") return renderUpcoming();
+    if (state.view === "settings") return renderSettings();
+    return renderAdmin();
+  }
+
+  function persistEvents() {
+    saveJson(STORAGE.events, { version: EVENT_DATA_VERSION, data: state.events });
   }
 
   function openDetail(eventId) {
@@ -519,11 +762,11 @@
         <span>· ${statusLabel(event.status)}</span>
       </div>
       <p style="margin-top:10px">${event.description || "설명 없음"}</p>
-      <div class="pills" style="margin-top:10px">
+      <div class="pills" style="margin-top:8px">
         <span class="pill">${precisionLabel(event)}</span>
         <span class="pill">신뢰도 ${Math.round(event.confidence * 100)}%</span>
       </div>
-      <div class="source-box">
+      <div class="card" style="margin-top:10px; padding:10px;">
         <div><strong>출처</strong></div>
         <div class="muted">${event.sourceTitle}</div>
         <a href="${event.sourceUrl}" target="_blank" rel="noopener noreferrer">${event.sourceUrl}</a>
@@ -531,7 +774,6 @@
         <div class="muted">${event.estimated ? `예상 일정: ${event.estimationBasis}` : "공식 공지 기반 일정"}</div>
       </div>
     `;
-
     if (typeof modal.showModal === "function") modal.showModal();
   }
 
@@ -544,63 +786,31 @@
       .replaceAll("'", "&#039;");
   }
 
-  function showToast(message) {
-    toastEl.textContent = message;
-    toastEl.classList.add("show");
-    window.clearTimeout(showToast.timer);
-    showToast.timer = window.setTimeout(() => toastEl.classList.remove("show"), 1700);
+  function parseDuplicates(events) {
+    const candidates = [];
+    for (let i = 0; i < events.length; i += 1) {
+      for (let j = i + 1; j < events.length; j += 1) {
+        const left = events[i];
+        const right = events[j];
+        if (left.brandId !== right.brandId) continue;
+        const sameSource = left.sourceUrl === right.sourceUrl;
+        const titleLeft = left.title.replace(/\s+/g, "").toLowerCase();
+        const titleRight = right.title.replace(/\s+/g, "").toLowerCase();
+        const similarTitle = titleLeft.includes(titleRight) || titleRight.includes(titleLeft);
+        if (sameSource || similarTitle) candidates.push(`${left.title} ↔ ${right.title}`);
+      }
+    }
+    return candidates;
   }
 
-  function render() {
-    const currentMonth = state.month;
-    const prevMonth = monthOffset(currentMonth, -1);
-    const nextMonth = monthOffset(currentMonth, 1);
-    const currentEvents = eventsForMonth(currentMonth);
-    const prevEvents = eventsForMonth(prevMonth);
-    const nextEvents = eventsForMonth(nextMonth);
-
-    const favoriteSummary =
-      state.favorites.size > 0
-        ? `${state.favorites.size}개 샵 선택됨`
-        : "전체 샵 표시 중";
-
-    root.innerHTML = `
-      <section class="calendar-panel">
-        <div class="month-head">
-          <button type="button" class="month-btn" data-action="month-prev" aria-label="이전 달">‹</button>
-          <div class="month-title-wrap">
-            <p class="month-subtitle">${favoriteSummary}</p>
-            <h1 class="month-title">${formatMonthLabel(currentMonth)}</h1>
-          </div>
-          <button type="button" class="month-btn" data-action="month-next" aria-label="다음 달">›</button>
-        </div>
-
-        <section class="calendar-swipe-area" data-swipe-zone="true" aria-label="월간 캘린더 스와이프 영역">
-          ${renderGhostStrip(prevMonth, prevEvents, "prev")}
-          ${renderCalendarGrid(currentMonth, currentEvents)}
-          ${renderGhostStrip(nextMonth, nextEvents, "next")}
-        </section>
-      </section>
-
-      <section class="shop-action">
-        <button type="button" class="shop-select-btn" data-action="open-shop-selection">샵 선택</button>
-      </section>
-    `;
-  }
-
-  document.body.addEventListener("click", (event) => {
+  document.body.addEventListener("click", function (event) {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
-
-    if (target instanceof HTMLButtonElement && target.value === "cancel") {
-      const hostDialog = target.closest("dialog");
-      if (hostDialog && typeof hostDialog.close === "function") hostDialog.close();
-      return;
-    }
-
     const actionTarget = target.closest("[data-action]");
     if (!(actionTarget instanceof HTMLElement)) return;
     const action = actionTarget.dataset.action;
+
+    if (action === "detail" && actionTarget.dataset.eventId) return openDetail(actionTarget.dataset.eventId);
 
     if (action === "month-prev") {
       shiftMonth(-1);
@@ -612,38 +822,117 @@
       return;
     }
 
-    if (action === "detail" && actionTarget.dataset.eventId) {
-      openDetail(actionTarget.dataset.eventId);
-      return;
+    if (action === "open-settings-tab") {
+      state.view = "settings";
+      return render();
     }
 
-    if (action === "open-shop-selection") {
-      renderShopDialog();
-      if (typeof shopDialog.showModal === "function") shopDialog.showModal();
-      return;
-    }
-
-    if (action === "save-shop-selection") {
-      const selected = Array.from(shopDialog.querySelectorAll("input[data-brand-checkbox]:checked")).map((input) => input.dataset.brandCheckbox);
-      state.favorites = new Set(selected.filter(Boolean));
+    if (action === "toggle-favorite" && actionTarget.dataset.brandId) {
+      if (state.favorites.has(actionTarget.dataset.brandId)) state.favorites.delete(actionTarget.dataset.brandId);
+      else state.favorites.add(actionTarget.dataset.brandId);
       saveJson(STORAGE.favorites, Array.from(state.favorites));
-      if (typeof shopDialog.close === "function") shopDialog.close();
-      showToast("샵 선택이 저장되었습니다.");
-      render();
+      showToast("관심 브랜드가 변경되었습니다.");
+      return render();
     }
+
+    if (action === "save-favorites") {
+      const selected = Array.from(document.querySelectorAll('input[data-setting="favorite-brand"]:checked')).map((input) => input.value);
+      state.favorites = new Set(selected);
+      saveJson(STORAGE.favorites, selected);
+      showToast("관심 브랜드를 저장했습니다.");
+      return render();
+    }
+
+    if (action === "save-prefs") {
+      state.prefs = {
+        enabled: document.getElementById("pref-enabled").checked,
+        notify7: document.getElementById("pref-7").checked,
+        notify1: document.getElementById("pref-1").checked,
+        notifyStart: document.getElementById("pref-start").checked,
+        customMinutes: Number(document.getElementById("pref-custom").value || 0),
+      };
+      saveJson(STORAGE.prefs, state.prefs);
+      return showToast("알림 설정을 저장했습니다.");
+    }
+
+    if (action === "simulate-notification") {
+      const upcoming = listEvents().filter((item) => item.status === "scheduled" && state.favorites.has(item.brandId));
+      return showToast(`알림 시뮬레이션 완료: 대상 ${upcoming.length}건`);
+    }
+
+    if (action === "admin-save" && actionTarget.dataset.id) {
+      const id = actionTarget.dataset.id;
+      const item = state.events.find((eventRow) => eventRow.id === id);
+      if (!item) return;
+      item.title = document.querySelector(`input[data-admin="title"][data-id="${id}"]`).value;
+      item.startDate = document.querySelector(`input[data-admin="startDate"][data-id="${id}"]`).value || null;
+      item.endDate = document.querySelector(`input[data-admin="endDate"][data-id="${id}"]`).value || null;
+      item.datePrecision = document.querySelector(`select[data-admin="datePrecision"][data-id="${id}"]`).value;
+      item.lastVerifiedAt = toYmd(new Date());
+      persistEvents();
+      state.adminLogs.push(`[${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}] ${item.title} 수정 저장`);
+      saveJson(STORAGE.adminLogs, state.adminLogs);
+      showToast("이벤트를 저장했습니다.");
+      return render();
+    }
+
+    if (action === "admin-run-ingest") {
+      state.adminLogs.push(`[${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}] 수집 재실행 완료 (시뮬레이션)`);
+      saveJson(STORAGE.adminLogs, state.adminLogs);
+      showToast("수집 재실행(시뮬레이션) 완료");
+      return render();
+    }
+
+    if (action === "admin-dedupe") {
+      const dupes = parseDuplicates(state.events);
+      const summary = dupes.length > 0 ? `중복 후보 ${dupes.length}건` : "중복 후보 없음";
+      state.adminLogs.push(`[${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}] ${summary}`);
+      saveJson(STORAGE.adminLogs, state.adminLogs);
+      showToast(summary);
+      return render();
+    }
+  });
+
+  root.addEventListener("input", function (event) {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (target.id === "filter-month") {
+      state.filters.month = target.value;
+      return render();
+    }
+    if (target.id === "filter-status") {
+      state.filters.status = target.value;
+      return render();
+    }
+    if (target.id === "filter-q") {
+      state.filters.q = target.value;
+      return render();
+    }
+    if (target.id === "filter-favorite") {
+      state.filters.favoriteOnly = target.checked;
+      return render();
+    }
+  });
+
+  navButtons.forEach((button) => {
+    button.addEventListener("click", function () {
+      state.view = button.dataset.view;
+      render();
+    });
   });
 
   const gesture = {
     active: false,
     preventScroll: false,
-    startX: 0,
     startY: 0,
+    startX: 0,
     startAt: 0,
   };
 
   root.addEventListener(
     "touchstart",
     (event) => {
+      if (state.view !== "calendar") return;
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
       if (!target.closest("[data-swipe-zone]")) return;
@@ -651,8 +940,8 @@
       const point = event.touches[0];
       gesture.active = true;
       gesture.preventScroll = false;
-      gesture.startX = point.clientX;
       gesture.startY = point.clientY;
+      gesture.startX = point.clientX;
       gesture.startAt = Date.now();
     },
     { passive: true },
@@ -661,11 +950,10 @@
   root.addEventListener(
     "touchmove",
     (event) => {
-      if (!gesture.active) return;
+      if (state.view !== "calendar" || !gesture.active) return;
       const point = event.touches[0];
       const deltaY = point.clientY - gesture.startY;
       const deltaX = point.clientX - gesture.startX;
-
       if (Math.abs(deltaY) > 8 && Math.abs(deltaY) > Math.abs(deltaX) * 1.05) {
         gesture.preventScroll = true;
         event.preventDefault();
@@ -677,23 +965,32 @@
   root.addEventListener(
     "touchend",
     (event) => {
+      if (state.view !== "calendar") return;
       if (!gesture.active) return;
       gesture.active = false;
-
       if (!gesture.preventScroll) return;
+
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (!target.closest("[data-swipe-zone]")) return;
 
       const point = event.changedTouches[0];
       const deltaY = point.clientY - gesture.startY;
       const deltaX = point.clientX - gesture.startX;
       const elapsed = Date.now() - gesture.startAt;
-      const isVerticalSwipe = Math.abs(deltaY) > 52 && Math.abs(deltaY) > Math.abs(deltaX) * 1.2 && elapsed < 700;
 
+      const isVerticalSwipe = Math.abs(deltaY) > 56 && Math.abs(deltaY) > Math.abs(deltaX) * 1.25 && elapsed < 700;
       if (!isVerticalSwipe) return;
-      if (deltaY < 0) shiftMonth(1);
-      else shiftMonth(-1);
+
+      if (deltaY < 0) {
+        shiftMonth(1);
+      } else {
+        shiftMonth(-1);
+      }
     },
     { passive: true },
   );
 
+  document.getElementById("build-badge").textContent = `APK ${new Date().toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" })}`;
   render();
 })();

@@ -383,11 +383,16 @@
       .sort((a, b) => (a.startDate || "9999-12-31").localeCompare(b.startDate || "9999-12-31"));
   }
 
-    function monthBounds(monthValue) {
+  function monthBounds(monthValue) {
     const [year, month] = monthValue.split("-").map(Number);
     const start = new Date(year, month - 1, 1, 12, 0, 0);
     const end = new Date(year, month, 0, 12, 0, 0);
     return { start, end };
+  }
+
+  function monthOffset(monthValue, delta) {
+    const [year, month] = monthValue.split("-").map(Number);
+    return getMonthString(new Date(year, month - 1 + delta, 1, 12, 0, 0));
   }
 
   function eventOverlapsMonth(event, monthStart, monthEnd) {
@@ -402,6 +407,20 @@
     if (!start) return false;
     const end = toDate(event.endDate || event.startDate) || start;
     return day >= start && day <= end;
+  }
+
+  function filteredEventsForMonth(monthValue) {
+    const { start: monthStart, end: monthEnd } = monthBounds(monthValue);
+    return listEvents().filter((event) => {
+      if (!eventOverlapsMonth(event, monthStart, monthEnd)) return false;
+      if (state.filters.status !== "all" && event.status !== state.filters.status) return false;
+      if (state.filters.favoriteOnly && !event.isFavorite) return false;
+      if (state.filters.q) {
+        const q = state.filters.q.toLowerCase();
+        return event.title.toLowerCase().includes(q) || event.brandName.toLowerCase().includes(q);
+      }
+      return true;
+    });
   }
 
   function renderCalendarGrid(monthValue, events) {
@@ -472,6 +491,44 @@
     showToast.timer = window.setTimeout(() => toastEl.classList.remove("show"), 1800);
   }
 
+  function renderGhostCalendarGrid(monthValue, events) {
+    const { start: monthStart } = monthBounds(monthValue);
+    const year = monthStart.getFullYear();
+    const month = monthStart.getMonth();
+    const firstWeekday = monthStart.getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const cells = [];
+    for (let i = 0; i < firstWeekday; i += 1) {
+      cells.push(null);
+    }
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      cells.push(new Date(year, month, day, 12, 0, 0));
+    }
+    while (cells.length % 7 !== 0) {
+      cells.push(null);
+    }
+
+    return `
+      <div class="calendar-ghost-grid" aria-hidden="true">
+        ${cells
+          .map((cell) => {
+            if (!cell) {
+              return '<div class="calendar-ghost-cell empty"></div>';
+            }
+            const hasEvent = events.some((event) => dayInRange(cell, event));
+            return `
+              <div class="calendar-ghost-cell">
+                <span class="calendar-ghost-date">${cell.getDate()}</span>
+                ${hasEvent ? '<span class="calendar-ghost-dot"></span>' : ""}
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    `;
+  }
+
   function renderEventCard(event) {
     return `
       <article class="event">
@@ -538,19 +595,13 @@
     `;
   }
 
-    function renderCalendar() {
-    const { start: monthStart, end: monthEnd } = monthBounds(state.filters.month);
-
-    const filtered = listEvents().filter((event) => {
-      if (!eventOverlapsMonth(event, monthStart, monthEnd)) return false;
-      if (state.filters.status !== "all" && event.status !== state.filters.status) return false;
-      if (state.filters.favoriteOnly && !event.isFavorite) return false;
-      if (state.filters.q) {
-        const q = state.filters.q.toLowerCase();
-        return event.title.toLowerCase().includes(q) || event.brandName.toLowerCase().includes(q);
-      }
-      return true;
-    });
+  function renderCalendar() {
+    const currentMonth = state.filters.month;
+    const prevMonth = monthOffset(currentMonth, -1);
+    const nextMonth = monthOffset(currentMonth, 1);
+    const filtered = filteredEventsForMonth(currentMonth);
+    const prevEvents = filteredEventsForMonth(prevMonth);
+    const nextEvents = filteredEventsForMonth(nextMonth);
 
     root.innerHTML = `
       <section class="card">
@@ -581,8 +632,18 @@
 
       <section class="card calendar-swipe-area">
         <div class="section-head"><h3>캘린더 보기</h3><span class="muted">${filtered.length}건</span></div>
-        <p class="muted swipe-hint">위/아래로 스와이프해서 월 이동</p>
-        ${renderCalendarGrid(state.filters.month, filtered)}
+        <p class="muted swipe-hint">위/아래 스와이프로 월 이동 · 전/후 월 미리보기 제공</p>
+        <div class="calendar-stack">
+          <button type="button" class="calendar-ghost previous" data-action="month-prev" aria-label="이전 월 보기">
+            <div class="calendar-ghost-label">이전 월 · ${formatMonthLabel(prevMonth)}</div>
+            ${renderGhostCalendarGrid(prevMonth, prevEvents)}
+          </button>
+          ${renderCalendarGrid(currentMonth, filtered)}
+          <button type="button" class="calendar-ghost next" data-action="month-next" aria-label="다음 월 보기">
+            <div class="calendar-ghost-label">다음 월 · ${formatMonthLabel(nextMonth)}</div>
+            ${renderGhostCalendarGrid(nextMonth, nextEvents)}
+          </button>
+        </div>
       </section>
 
       <section class="card">
@@ -754,9 +815,11 @@
   document.body.addEventListener("click", function (event) {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
-    const action = target.dataset.action;
+    const actionTarget = target.closest("[data-action]");
+    if (!(actionTarget instanceof HTMLElement)) return;
+    const action = actionTarget.dataset.action;
 
-    if (action === "detail" && target.dataset.eventId) return openDetail(target.dataset.eventId);
+    if (action === "detail" && actionTarget.dataset.eventId) return openDetail(actionTarget.dataset.eventId);
 
     if (action === "month-prev") {
       shiftMonth(-1);
@@ -768,9 +831,9 @@
       return;
     }
 
-    if (action === "toggle-favorite" && target.dataset.brandId) {
-      if (state.favorites.has(target.dataset.brandId)) state.favorites.delete(target.dataset.brandId);
-      else state.favorites.add(target.dataset.brandId);
+    if (action === "toggle-favorite" && actionTarget.dataset.brandId) {
+      if (state.favorites.has(actionTarget.dataset.brandId)) state.favorites.delete(actionTarget.dataset.brandId);
+      else state.favorites.add(actionTarget.dataset.brandId);
       saveJson(STORAGE.favorites, Array.from(state.favorites));
       showToast("관심 브랜드가 변경되었습니다.");
       return render();
@@ -801,8 +864,8 @@
       return showToast(`알림 시뮬레이션 완료: 대상 ${upcoming.length}건`);
     }
 
-    if (action === "admin-save" && target.dataset.id) {
-      const id = target.dataset.id;
+    if (action === "admin-save" && actionTarget.dataset.id) {
+      const id = actionTarget.dataset.id;
       const item = state.events.find((eventRow) => eventRow.id === id);
       if (!item) return;
       item.title = document.querySelector(`input[data-admin="title"][data-id="${id}"]`).value;
@@ -872,7 +935,7 @@
       if (state.view !== "calendar") return;
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
-      if (!target.closest(".calendar-swipe-area")) return;
+      if (!target.closest(".calendar-stack")) return;
 
       const point = event.touches[0];
       touchStartY = point.clientY;
@@ -888,7 +951,7 @@
       if (state.view !== "calendar") return;
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
-      if (!target.closest(".calendar-swipe-area")) return;
+      if (!target.closest(".calendar-stack")) return;
 
       const point = event.changedTouches[0];
       const deltaY = point.clientY - touchStartY;
